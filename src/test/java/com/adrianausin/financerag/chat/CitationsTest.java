@@ -17,6 +17,12 @@ class CitationsTest {
     }
 
     @Test
+    void stripsCitationMarkers() {
+        assertThat(Citations.strip("Income rose 8% [1]. Costs fell [2][3], see [1, 4]. Unit: [EUR m]."))
+                .isEqualTo("Income rose 8%. Costs fell, see. Unit: [EUR m].");
+    }
+
+    @Test
     void ignoresBracketsThatAreNotCitations() {
         assertThat(Citations.cited("Net income [EUR m] was 1,204 [restated].", 5)).isEmpty();
     }

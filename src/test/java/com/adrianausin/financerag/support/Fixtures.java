@@ -41,5 +41,6 @@ public class Fixtures {
     public void deleteAll() {
         jdbc.sql("DELETE FROM documents").update();
         jdbc.sql("DELETE FROM vector_store").update();
+        jdbc.sql("DELETE FROM spring_ai_chat_memory").update();
     }
 }

@@ -5,8 +5,11 @@ import java.util.UUID;
 
 import org.jspecify.annotations.Nullable;
 
-/** @param sources every source given to the model, flagged when the answer cites it */
-public record Answer(String text, List<Reference> sources) {
+/**
+ * @param searchQuery what was searched for: the question, or its standalone rewrite for a follow-up
+ * @param sources     every source given to the model, flagged when the answer cites it
+ */
+public record Answer(UUID conversationId, String text, String searchQuery, List<Reference> sources) {
 
     public record Reference(int number, UUID documentId, String filename, @Nullable Integer page, String excerpt,
                             double score, boolean cited) {

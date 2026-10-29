@@ -33,6 +33,12 @@ spring:
         dimensions: 768
         distance-type: cosine_distance
         index-type: hnsw
+    chat:
+      memory:
+        repository:
+          jdbc:
+            # The table is created by Flyway (V3__create_chat_memory.sql)
+            initialize-schema: never
 
 server:
   port: ${PORT:8080}
@@ -53,3 +59,7 @@ rag:
     # Cosine similarity a chunk needs to be used as a source; a starting point for
     # nomic-embed-text, worth tuning on your own documents
     similarity-threshold: 0.5
+    # Messages of a conversation sent with each question
+    history-size: 10
+    # Rewrite follow-ups ("and in 2024?") into standalone questions before searching
+    rewrite-follow-ups: true

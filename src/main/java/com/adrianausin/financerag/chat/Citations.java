@@ -10,6 +10,7 @@ import java.util.regex.Pattern;
 final class Citations {
 
     private static final Pattern CITATION = Pattern.compile("\\[(\\d+(?:\\s*,\\s*\\d+)*)]");
+    private static final Pattern CITATION_WITH_SPACE = Pattern.compile(" ?" + CITATION.pattern());
 
     private Citations() {
     }
@@ -26,5 +27,10 @@ final class Citations {
                     .forEach(numbers::add);
         }
         return numbers;
+    }
+
+    /** The answer without its citation markers. */
+    static String strip(String answer) {
+        return CITATION_WITH_SPACE.matcher(answer).replaceAll("");
     }
 }

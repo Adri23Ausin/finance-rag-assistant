@@ -9,7 +9,9 @@
 
 Ask questions about financial reports in plain language and get answers **with citations to the exact file and page**. Built with **Spring AI**: documents are parsed, chunked and embedded into **PostgreSQL with pgvector**, and a **local LLM through Ollama** answers from the most relevant passages only. No API keys, no data leaving your machine.
 
-> Example: "What was the CET1 ratio at the end of 2025?" → "The CET1 ratio closed 2025 at 13.2%, above the 12.0% management target **[1]**." with **[1]** = `aurelia-annual-report-2025.pdf`, page 3.
+![Chat with cited sources](docs/screenshot.png)
+
+*Real answers from `llama3.2` on the fictional sample report. The follow-up was rewritten into a standalone question before searching.*
 
 ### Author: Adrián Ausín Cuesta
 
@@ -109,7 +111,7 @@ docker compose --profile app up --build
 
 Open http://localhost:8080 and upload the sample documents in [`samples/`](samples): a fictional bank annual report (PDF) and a fictional retail quarterly release (Markdown).
 
-On the first start the application pulls `llama3.2` (about 2 GB) and `nomic-embed-text` into a Docker volume, which takes a few minutes; later starts are immediate. By default the models run on CPU, which is noticeably slower than a GPU; with an NVIDIA GPU, give the `ollama` service access to it in Compose. Other models can be set with `CHAT_MODEL` (an embedding model with a different dimension needs a new migration). Host ports are configurable with `APP_PORT`, `POSTGRES_PORT` and `OLLAMA_PORT`.
+On the first start the application pulls `llama3.2` (about 2 GB) and `nomic-embed-text` into a Docker volume, which takes a few minutes; later starts are immediate. By default the models run on CPU: on a 16-core laptop without GPU an answer took about a minute (follow-ups a little longer, because of the rewrite), while off-topic questions return at once. With an NVIDIA GPU, give the `ollama` service access to it in Compose. Other models can be set with `CHAT_MODEL` (an embedding model with a different dimension needs a new migration). Host ports are configurable with `APP_PORT`, `POSTGRES_PORT` and `OLLAMA_PORT`.
 
 ### On your machine
 
@@ -144,18 +146,18 @@ Starts PostgreSQL in a container and replaces the models with stand-ins: a hashi
 | `GET` | `/api/v1/conversations/{id}/messages` | Conversation history |
 | `DELETE` | `/api/v1/conversations/{id}` | Forget a conversation |
 
-Shape of a `POST /api/v1/chat` response (shortened, illustrative values):
+A real `POST /api/v1/chat` response (shortened):
 
 ```json
 {
-  "conversationId": "3f0c5e2a-8d1b-4c39-9a7e-1b2f6d4c8e90",
-  "text": "The CET1 ratio closed 2025 at 13.2%, above the 12.0% management target [1].",
+  "conversationId": "5d0b6c1e-6a4f-4f0e-9a43-2a4b8f1d7c3e",
+  "text": "According to [1], page 3, the CET1 ratio (fully loaded) at the end of 2025 was 13.2%.",
   "searchQuery": "What was the CET1 ratio at the end of 2025?",
   "sources": [
-    { "number": 1, "filename": "aurelia-annual-report-2025.pdf", "page": 3, "score": 0.82, "cited": true,
-      "excerpt": "Capital and liquidity ... The CET1 ratio closed the year at 13.2% ..." },
-    { "number": 2, "filename": "aurelia-annual-report-2025.pdf", "page": 5, "score": 0.64, "cited": false,
-      "excerpt": "Outlook for 2026 ... a CET1 ratio of around 12.0% to 12.5% ..." }
+    { "number": 1, "filename": "aurelia-annual-report-2025.pdf", "page": 3, "score": 0.731, "cited": true,
+      "excerpt": "Capital and liquidity\nIndicator 31 Dec 2025 31 Dec 2024\nCET1 ratio (fully loaded) 13.2% 12.7% ..." },
+    { "number": 2, "filename": "aurelia-annual-report-2025.pdf", "page": 2, "score": 0.597, "cited": false,
+      "excerpt": "Financial highlights\nIndicator 2025 2024 Change\nNet interest income (EUR m) 4,130 3,824 +8.0% ..." }
   ]
 }
 ```
@@ -194,6 +196,7 @@ No model server is needed. The tests use pgvector in a container and two fake mo
 - **Bounded background indexing.** Embedding is limited by the model server, so documents are indexed on virtual threads but at most two at a time. Indexing is idempotent (it replaces a document's chunks), which makes retries and restart recovery simple.
 - **Schema owned by Flyway.** The vector table (with an HNSW index and a GIN index on metadata) and the chat memory table are migrations, not created by Spring AI at startup, so the embedding dimension is an explicit, versioned decision.
 - **Local models by default.** Financial documents are often confidential; Ollama keeps everything on the machine. Spring AI's abstractions mean switching to a hosted model is a dependency and configuration change. Two details that matter with Ollama: its default context window (2048 tokens) would silently cut off the sources, so it is raised to 8192, and Tomcat's 30-second async timeout is raised for slow CPU generation.
+- **Small models need checking.** With `llama3.2` (3B) the answers to the sample questions were correct, and a question the documents don't answer ("the share price target") got "could not find" instead of an invented figure. But one follow-up was answered correctly without its `[n]` citation; the UI then still offers the sources that were searched. Larger models are worth trying when a GPU is available.
 - **Tests that don't need an LLM.** Deterministic fakes make the tests fast and reliable and let them assert the exact prompt. What they cannot test is answer quality; that needs an evaluation set (see below).
 
 ## Possible improvements

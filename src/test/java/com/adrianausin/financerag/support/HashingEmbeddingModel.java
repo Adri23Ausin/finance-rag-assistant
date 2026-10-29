@@ -10,6 +10,7 @@ import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.ai.retry.NonTransientAiException;
 
 /**
  * A deterministic stand-in for a real embedding model: a bag of words hashed into 768
@@ -24,8 +25,16 @@ public class HashingEmbeddingModel implements EmbeddingModel {
             "the", "and", "for", "was", "were", "what", "which", "how", "did", "does", "its", "our", "with", "this",
             "that", "from", "are", "has", "have", "had", "about", "in", "of", "to", "is", "a", "an", "on", "at", "by");
 
+    private volatile boolean unavailable;
+
+    /** Simulates a model server that is down or does not have the model. */
+    public void unavailable(boolean unavailable) {
+        this.unavailable = unavailable;
+    }
+
     @Override
     public EmbeddingResponse call(EmbeddingRequest request) {
+        failIfUnavailable();
         List<String> texts = request.getInstructions();
         return new EmbeddingResponse(IntStream.range(0, texts.size())
                 .mapToObj(i -> new Embedding(embed(texts.get(i)), i))
@@ -39,6 +48,7 @@ public class HashingEmbeddingModel implements EmbeddingModel {
 
     @Override
     public float[] embed(String text) {
+        failIfUnavailable();
         float[] vector = new float[DIMENSIONS];
         for (String word : text.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
             if (word.length() > 1 && !STOP_WORDS.contains(word)) {
@@ -54,6 +64,12 @@ public class HashingEmbeddingModel implements EmbeddingModel {
             vector[i] /= (float) norm;
         }
         return vector;
+    }
+
+    private void failIfUnavailable() {
+        if (unavailable) {
+            throw new NonTransientAiException("HTTP 404 - {\"error\":\"model \\\"nomic-embed-text\\\" not found, try pulling it first\"}");
+        }
     }
 
     @Override

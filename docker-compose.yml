@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    environment:
+      POSTGRES_DB: financerag
+      POSTGRES_USER: financerag
+      POSTGRES_PASSWORD: financerag
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - financerag:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U financerag -d financerag"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Local LLM and embedding model, no API key needed. Models are kept in a volume.
+  ollama:
+    image: ollama/ollama:0.12.6
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  financerag:
+  ollama:

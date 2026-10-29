@@ -1,6 +1,7 @@
 package com.adrianausin.financerag.document;
 
 import java.time.Clock;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -69,7 +70,7 @@ public class DocumentIndexer implements DisposableBean {
             }
             removeChunks(id);
             vectorStore.add(chunks);
-            if (!documents.markIndexed(id, lastPage(sections), chunks.size(), clock.instant())) {
+            if (!documents.markIndexed(id, lastPage(sections), chunks.size(), clock.instant().truncatedTo(ChronoUnit.MICROS))) {
                 removeChunks(id); // deleted while it was being indexed
                 return;
             }

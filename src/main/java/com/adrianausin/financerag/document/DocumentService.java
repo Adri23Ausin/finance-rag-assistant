@@ -3,6 +3,8 @@ package com.adrianausin.financerag.document;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
@@ -54,7 +56,7 @@ public class DocumentService {
         }
 
         StoredDocument document = new StoredDocument(UUID.randomUUID(), filename, contentType, content.length, checksum,
-                DocumentStatus.INDEXING, null, null, null, clock.instant(), null);
+                DocumentStatus.INDEXING, null, null, null, now(), null);
         try {
             documents.insert(document, content);
         }
@@ -96,6 +98,11 @@ public class DocumentService {
     @EventListener(ApplicationReadyEvent.class)
     void resumeInterruptedIndexing() {
         documents.findByStatus(DocumentStatus.INDEXING).forEach(document -> indexer.indexAsync(document.id()));
+    }
+
+    /** PostgreSQL keeps microseconds: the upload response must show the same instant as later reads. */
+    private Instant now() {
+        return clock.instant().truncatedTo(ChronoUnit.MICROS);
     }
 
     private static String sanitize(@Nullable String filename) {

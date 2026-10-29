@@ -59,12 +59,14 @@ class DocumentIndexingIT {
         assertThat(upload).bodyJson().extractingPath("$.status").isEqualTo("INDEXING");
         UUID id = idOf(upload);
         assertThat(upload.getResponse().getHeader("Location")).isEqualTo("/api/v1/documents/" + id);
+        String uploadedAt = JsonPath.read(body(upload), "$.uploadedAt");
 
         awaitStatus(id, DocumentStatus.INDEXED);
         assertThat(mvc.get().uri("/api/v1/documents/{id}", id)).bodyJson()
                 .hasPathSatisfying("$.pages", pages -> pages.assertThat().isEqualTo(3))
                 .hasPathSatisfying("$.chunks", chunks -> chunks.assertThat().isEqualTo(3))
-                .hasPathSatisfying("$.contentType", type -> type.assertThat().isEqualTo("application/pdf"));
+                .hasPathSatisfying("$.contentType", type -> type.assertThat().isEqualTo("application/pdf"))
+                .hasPathSatisfying("$.uploadedAt", at -> at.assertThat().isEqualTo(uploadedAt));
 
         List<Document> hits = vectorStore.similaritySearch(SearchRequest.builder().query("CET1 ratio capital").topK(1).build());
         assertThat(hits).singleElement().satisfies(hit -> {
@@ -178,8 +180,11 @@ class DocumentIndexingIT {
     }
 
     private static UUID idOf(MvcTestResult result) {
-        String body = new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
-        return UUID.fromString(JsonPath.read(body, "$.id"));
+        return UUID.fromString(JsonPath.read(body(result), "$.id"));
+    }
+
+    private static String body(MvcTestResult result) {
+        return new String(result.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
     }
 
     private void awaitStatus(UUID id, DocumentStatus status) {

@@ -16,7 +16,7 @@ class DocumentChunkerTest {
 
     private static final UUID DOCUMENT_ID = UUID.fromString("7d0f6f4e-2b47-4c8e-9a51-3c1d2b5e8f10");
 
-    private final DocumentChunker chunker = new DocumentChunker(new IngestionProperties(100, 200));
+    private final DocumentChunker chunker = new DocumentChunker(new IngestionProperties(100, 200, 1));
 
     @Test
     void chunksCarryTheDocumentFilenamePageAndPosition() {

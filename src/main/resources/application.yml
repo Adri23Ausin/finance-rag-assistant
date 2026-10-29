@@ -8,6 +8,10 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/financerag
     username: ${DB_USERNAME:financerag}
     password: ${DB_PASSWORD:financerag}
+  servlet:
+    multipart:
+      max-file-size: 25MB
+      max-request-size: 25MB
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
@@ -20,6 +24,13 @@ spring:
         temperature: 0.1
       embedding:
         model: ${EMBEDDING_MODEL:nomic-embed-text}
+    vectorstore:
+      pgvector:
+        # The table is created by Flyway (V1__create_vector_store.sql)
+        initialize-schema: false
+        dimensions: 768
+        distance-type: cosine_distance
+        index-type: hnsw
 
 server:
   port: ${PORT:8080}
@@ -29,3 +40,9 @@ management:
     web:
       exposure:
         include: health, info, metrics
+
+rag:
+  ingestion:
+    chunk-size: 350
+    # Documents indexed at the same time (embedding is CPU/GPU bound on the model server)
+    max-concurrent-indexing: 2

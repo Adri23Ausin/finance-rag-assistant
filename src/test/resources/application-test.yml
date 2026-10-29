@@ -1,0 +1,6 @@
+spring:
+  ai:
+    # Fake models are provided by IntegrationTestConfiguration
+    model:
+      chat: none
+      embedding: none

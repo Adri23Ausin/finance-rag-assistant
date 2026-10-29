@@ -4,3 +4,8 @@ spring:
     model:
       chat: none
       embedding: none
+
+rag:
+  retrieval:
+    # The hashing embedding model scores word overlap, lower than a real model
+    similarity-threshold: 0.1

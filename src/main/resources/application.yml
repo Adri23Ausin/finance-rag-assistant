@@ -22,6 +22,8 @@ spring:
       chat:
         model: ${CHAT_MODEL:llama3.2}
         temperature: 0.1
+        # Ollama's default context window (2048 tokens) silently cuts off the sources
+        num-ctx: 8192
       embedding:
         model: ${EMBEDDING_MODEL:nomic-embed-text}
     vectorstore:
@@ -46,3 +48,8 @@ rag:
     chunk-size: 350
     # Documents indexed at the same time (embedding is CPU/GPU bound on the model server)
     max-concurrent-indexing: 2
+  retrieval:
+    top-k: 5
+    # Cosine similarity a chunk needs to be used as a source; a starting point for
+    # nomic-embed-text, worth tuning on your own documents
+    similarity-threshold: 0.5

@@ -1,0 +1,37 @@
+# Local run listens on 8080 (set PORT to change it). Sample documents are in samples/.
+
+### Upload a document (indexed in the background)
+POST http://localhost:8080/api/v1/documents
+Content-Type: multipart/form-data; boundary=boundary
+
+--boundary
+Content-Disposition: form-data; name="file"; filename="aurelia-annual-report-2025.pdf"
+Content-Type: application/pdf
+
+< ./samples/aurelia-annual-report-2025.pdf
+--boundary--
+
+### Documents and their indexing status
+GET http://localhost:8080/api/v1/documents
+
+### Ask a question
+POST http://localhost:8080/api/v1/chat
+Content-Type: application/json
+
+{"question": "What was the CET1 ratio at the end of 2025?"}
+
+### Follow-up in the same conversation (use the conversationId of the previous answer)
+POST http://localhost:8080/api/v1/chat
+Content-Type: application/json
+
+{"question": "And how does it compare with the target?", "conversationId": "00000000-0000-0000-0000-000000000000"}
+
+### Stream the answer (Server-Sent Events)
+POST http://localhost:8080/api/v1/chat/stream
+Content-Type: application/json
+Accept: text/event-stream
+
+{"question": "How did net interest income evolve in 2025?"}
+
+### Messages of a conversation
+GET http://localhost:8080/api/v1/conversations/00000000-0000-0000-0000-000000000000/messages

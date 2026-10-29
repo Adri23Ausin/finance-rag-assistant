@@ -21,7 +21,7 @@ spring:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
       init:
         # Download the models on first start (llama3.2 is about 2 GB)
-        pull-model-strategy: when_missing
+        pull-model-strategy: ${OLLAMA_PULL_MODEL_STRATEGY:when_missing}
         timeout: 20m
       chat:
         model: ${CHAT_MODEL:llama3.2}

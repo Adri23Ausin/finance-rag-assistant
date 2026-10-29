@@ -22,6 +22,36 @@ services:
       - "${OLLAMA_PORT:-11434}:11434"
     volumes:
       - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # The application. On first start it pulls the models into the ollama volume (a few minutes).
+  finance-rag-assistant:
+    build: .
+    image: finance-rag-assistant:latest
+    profiles: ["app"]
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    environment:
+      DB_HOST: postgres
+      OLLAMA_BASE_URL: http://ollama:11434
+      CHAT_MODEL: ${CHAT_MODEL:-llama3.2}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nomic-embed-text}
+      OLLAMA_PULL_MODEL_STRATEGY: ${OLLAMA_PULL_MODEL_STRATEGY:-when_missing}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 30m
 
 volumes:
   financerag:

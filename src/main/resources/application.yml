@@ -12,6 +12,10 @@ spring:
     multipart:
       max-file-size: 25MB
       max-request-size: 25MB
+  mvc:
+    async:
+      # Streamed answers from a local model on CPU can take a while (Tomcat's default is 30s)
+      request-timeout: 5m
   ai:
     ollama:
       base-url: ${OLLAMA_BASE_URL:http://localhost:11434}

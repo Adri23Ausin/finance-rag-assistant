@@ -17,6 +17,8 @@ import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransfo
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 /**
  * Retrieval-augmented answers: the question is matched against the indexed chunks, the best ones
@@ -47,26 +49,41 @@ public class AssistantService {
     }
 
     public Answer ask(Question question) {
-        String conversationId = question.conversationId().toString();
-        List<Message> history = memory.get(conversationId);
-        String searchQuery = searchQuery(question.text(), history);
-
-        List<Source> sources = retriever.retrieve(searchQuery, question.documentIds());
-        if (sources.isEmpty()) {
-            // Nothing relevant: answering anyway would only invite the model to make something up
-            remember(conversationId, question.text(), NOT_FOUND);
-            return new Answer(question.conversationId(), NOT_FOUND, searchQuery, List.of());
+        Turn turn = prepare(question);
+        if (turn.sources().isEmpty()) {
+            remember(turn, NOT_FOUND);
+            return new Answer(question.conversationId(), NOT_FOUND, turn.searchQuery(), List.of());
         }
 
-        String answer = Objects.requireNonNullElse(chatClient.prompt()
-                .system(system -> system.text(systemPrompt).param("sources", format(sources)))
-                .messages(history)
-                .user(question.text())
-                .call()
-                .content(), "");
+        String answer = Objects.requireNonNullElse(prompt(turn).call().content(), "");
 
-        remember(conversationId, question.text(), answer);
-        return new Answer(question.conversationId(), answer, searchQuery, citedSources(answer, sources));
+        remember(turn, answer);
+        return new Answer(question.conversationId(), answer, turn.searchQuery(), citedSources(answer, turn.sources()));
+    }
+
+    /**
+     * The same answer, streamed as the model generates it. Retrieval happens before the stream
+     * starts, so its errors are ordinary HTTP errors; the conversation is updated once the answer
+     * is complete.
+     */
+    public Flux<AnswerEvent> stream(Question question) {
+        Turn turn = prepare(question);
+        var started = new AnswerEvent.Started(question.conversationId(), turn.searchQuery(),
+                turn.sources().stream().map(source -> Answer.Reference.of(source, false)).toList());
+        if (turn.sources().isEmpty()) {
+            remember(turn, NOT_FOUND);
+            return Flux.just(started, new AnswerEvent.Token(NOT_FOUND), new AnswerEvent.Completed(Set.of()));
+        }
+
+        StringBuilder answer = new StringBuilder();
+        Flux<AnswerEvent> tokens = prompt(turn).stream().content()
+                .doOnNext(answer::append)
+                .map(AnswerEvent.Token::new);
+        Mono<AnswerEvent> completed = Mono.fromCallable(() -> {
+            remember(turn, answer.toString());
+            return new AnswerEvent.Completed(Citations.cited(answer.toString(), turn.sources().size()));
+        });
+        return Flux.concat(Flux.just(started), tokens, completed);
     }
 
     public List<Message> history(UUID conversationId) {
@@ -75,6 +92,21 @@ public class AssistantService {
 
     public void forget(UUID conversationId) {
         memory.clear(conversationId.toString());
+    }
+
+    private Turn prepare(Question question) {
+        String conversationId = question.conversationId().toString();
+        List<Message> history = memory.get(conversationId);
+        String searchQuery = searchQuery(question.text(), history);
+        List<Source> sources = retriever.retrieve(searchQuery, question.documentIds());
+        return new Turn(conversationId, question.text(), history, searchQuery, sources);
+    }
+
+    private ChatClient.ChatClientRequestSpec prompt(Turn turn) {
+        return chatClient.prompt()
+                .system(system -> system.text(systemPrompt).param("sources", format(turn.sources())))
+                .messages(turn.history())
+                .user(turn.question());
     }
 
     /** Follow-ups often only make sense with the conversation ("and in 2024?"), so they are searched as rewritten. */
@@ -86,11 +118,12 @@ public class AssistantService {
     }
 
     /**
-     * Citation markers are not kept: [1] in an earlier answer points at that turn's sources, and
-     * would be read as a reference to the current ones.
+     * Nothing relevant is answered without calling the model: answering anyway would only invite
+     * it to make something up. Citation markers are not remembered: [1] in an earlier answer points
+     * at that turn's sources, and would be read as a reference to the current ones.
      */
-    private void remember(String conversationId, String question, String answer) {
-        memory.add(conversationId, List.of(new UserMessage(question), new AssistantMessage(Citations.strip(answer))));
+    private void remember(Turn turn, String answer) {
+        memory.add(turn.conversationId(), List.of(new UserMessage(turn.question()), new AssistantMessage(Citations.strip(answer))));
     }
 
     static String format(List<Source> sources) {
@@ -104,6 +137,10 @@ public class AssistantService {
         return sources.stream()
                 .map(source -> Answer.Reference.of(source, cited.contains(source.number())))
                 .toList();
+    }
+
+    private record Turn(String conversationId, String question, List<Message> history, String searchQuery,
+                        List<Source> sources) {
     }
 
     /**

@@ -20,11 +20,19 @@ import reactor.core.publisher.Flux;
  */
 public class ScriptedChatModel implements ChatModel {
 
+    private static final String FAIL = "<fail>";
+
     private final Deque<String> replies = new ConcurrentLinkedDeque<>();
     private final List<Prompt> prompts = Collections.synchronizedList(new ArrayList<>());
 
     public void reply(String... answers) {
         replies.addAll(Arrays.asList(answers));
+    }
+
+    /** The next streamed reply emits {@code partial} and then fails, like a model server going away. */
+    public void replyThenFail(String partial) {
+        replies.add(partial);
+        replies.add(FAIL);
     }
 
     public List<Prompt> prompts() {
@@ -51,7 +59,12 @@ public class ScriptedChatModel implements ChatModel {
     public Flux<ChatResponse> stream(Prompt prompt) {
         prompts.add(prompt);
         String reply = nextReply();
-        return Flux.fromArray(reply.split("(?<= )")).map(ScriptedChatModel::response);
+        Flux<ChatResponse> tokens = Flux.fromArray(reply.split("(?<= )")).map(ScriptedChatModel::response);
+        if (FAIL.equals(replies.peek())) {
+            replies.poll();
+            return tokens.concatWith(Flux.error(new IllegalStateException("Connection to the model server lost")));
+        }
+        return tokens;
     }
 
     private String nextReply() {
